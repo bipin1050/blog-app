@@ -1,17 +1,24 @@
+from django.contrib.auth import authenticate
+from django.contrib.auth import login
+from django.contrib.auth import logout
+from django.shortcuts import get_object_or_404
 from django.shortcuts import render
-
+from rest_framework import status
+from rest_framework import filters
+from rest_framework.generics import ListAPIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from .models import BlogPost
+from .models import Category
+from .serializer import BlogCreateSerializer
+from .serializer import BlogSerializer
+from .serializer import CategorySerializer
+from .serializer import CreateUserSerializer
 from .serializer import LoginSerializer
 from .serializer import UserSerializer
-from .serializer import CreateUserSerializer
-
-from django.contrib.auth import authenticate
-from django.contrib.auth import login
-from django.contrib.auth import logout
-from rest_framework import status
+from .serializer import CommentSerializer
 
 class LoginView(APIView):
     def post(self, request):
@@ -53,3 +60,96 @@ class RegisterView(APIView):
             {"detail": "User created successfully."},
             status=status.HTTP_201_CREATED,
         )
+
+
+class BlogDetailView(APIView):
+    """
+    create a specific Blog instance.
+    """
+    search_fields = [
+        "title",
+        "content",
+        "tags__name",
+        "category__name",
+    ]
+
+    def get(self, request, pk):
+        blog = get_object_or_404(BlogPost, pk=pk)
+        serializer = BlogSerializer(blog)
+        return Response(serializer.data)
+
+
+class BlogView(APIView):
+    """
+    create or delete blog instance
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = BlogCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        category = serializer.validated_data["category"]
+
+        category = Category.objects.get_or_create(name=category)[0]
+        serializer.save(author=request.user, category=category)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    def delete(self, request, pk):
+        blog = get_object_or_404(BlogPost, pk=pk)
+        if blog.author == request.user:
+            blog.delete()
+            return Response(
+                {"message": "Blog deleted successfully"},
+                status=status.HTTP_204_NO_CONTENT,
+            )
+        else:
+            return Response(
+                {"message": "You are not authorized to delete this blog"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+
+class RecentBlogListView(ListAPIView):
+    serializer_class = BlogSerializer
+
+    def get_queryset(self):
+        return BlogPost.objects.order_by("-creation_date")[:5]
+
+
+class BlogListByCategoryView(ListAPIView):
+    serializer_class = BlogSerializer
+    filter_backends = [filters.SearchFilter]
+
+    def get_queryset(self):
+        category_id = self.kwargs.get("category_id")
+        if category_id:
+            queryset = BlogPost.objects.filter(category__id=category_id)
+        else:
+            queryset = BlogPost.objects.all()
+        return queryset
+
+
+class CategoryListView(APIView):
+    def get(self, request):
+        categories = Category.objects.all()
+        serializer = CategorySerializer(categories, many=True)
+        return Response(serializer.data)
+
+
+class CommentCreateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, blog_id):
+        try:
+            blog = BlogPost.objects.get(id=blog_id)
+        except BlogPost.DoesNotExist:
+            return Response(
+                {"message": "Blog not found"}, status=status.HTTP_404_NOT_FOUND
+            )
+
+        serializer = CommentSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(author=request.user, blog_post=blog)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)

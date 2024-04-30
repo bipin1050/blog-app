@@ -7,9 +7,11 @@ from django.utils.translation import gettext_lazy as _
 
 class User(AbstractUser):
     email = models.EmailField(_("email address"), unique=True)
-    
+
     def __str__(self):
-        return self.first_name + " " + self.last_name
+        return (
+            self.first_name + " " + self.last_name if self.first_name else self.username
+        )
 
 
 class Category(models.Model):
@@ -36,6 +38,18 @@ class BlogPost(models.Model):
 
     def __str__(self):
         return self.title
+
+
+# class BlogPost(models.Model):
+#     title = models.CharField(max_length=255)
+#     content = ArrayField(models.TextField())
+#     author = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
+#     creation_date = models.DateField(auto_now_add=True)
+#     category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True)
+#     tags = models.ManyToManyField(Tag)
+
+#     def __str__(self):
+#         return self.title
 
 
 class Comment(models.Model):
