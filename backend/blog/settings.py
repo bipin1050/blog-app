@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/5.0/ref/settings/
 """
 
 from pathlib import Path
+
 from blog.env import env
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -26,14 +27,12 @@ SECRET_KEY = "django-insecure--%w@7^om0hpmlhtsc2+d9)ek00dfjtc5g0zm%_emwj8ir-#cd6
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
-
-
-# Application definition
-
 INSTALLED_APPS = [
     "api",
+    "corsheaders",
     "rest_framework",
+    "rest_framework.authtoken",
+    "dj_rest_auth",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -47,10 +46,15 @@ MIDDLEWARE = [
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
+    "corsheaders.middleware.CorsMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
+
+# Allow requests from localhost:3000 (for development purposes)
+CORS_ALLOWED_ORIGINS = [f"http://{h}" for h in env.ALLOWED_HOSTS.split(",") if h]
+CSRF_TRUSTED_ORIGINS = [f"http://{h}" for h in env.ALLOWED_HOSTS.split(",") if h]
 
 ROOT_URLCONF = "blog.urls"
 
@@ -129,3 +133,21 @@ STATIC_URL = "static/"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 AUTH_USER_MODEL = "api.User"
+
+
+REST_AUTH_SERIALIZERS = {
+    "PASSWORD_RESET_SERIALIZER": ("api.auth_serializers.CustomPasswordResetSerializer"),
+    "PASSWORD_RESET_CONFIRM_SERIALIZER": (
+        "api.auth_serializers.CustomPasswordResetConfirmSerializer"
+    ),
+}
+
+
+EMAIL_HOST = env.EMAIL_HOST
+EMAIL_HOST_USER = env.EMAIL_HOST_USER
+EMAIL_HOST_PASSWORD = env.EMAIL_HOST_PASSWORD
+DEFAULT_FROM_EMAIL = env.DEFAULT_FROM_EMAIL
+EMAIL_PORT = env.EMAIL_PORT
+EMAIL_USE_SSL = env.EMAIL_USE_SSL
+EMAIL_USE_TLS = env.EMAIL_USE_TLS
+EMAIL_TIMEOUT = env.EMAIL_TIMEOUT

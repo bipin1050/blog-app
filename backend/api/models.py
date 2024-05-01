@@ -40,18 +40,6 @@ class BlogPost(models.Model):
         return self.title
 
 
-# class BlogPost(models.Model):
-#     title = models.CharField(max_length=255)
-#     content = ArrayField(models.TextField())
-#     author = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
-#     creation_date = models.DateField(auto_now_add=True)
-#     category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True)
-#     tags = models.ManyToManyField(Tag)
-
-#     def __str__(self):
-#         return self.title
-
-
 class Comment(models.Model):
     content = models.TextField()
     author = models.ForeignKey(User, on_delete=models.CASCADE)

@@ -1,10 +1,16 @@
+from api.paginations import PageSizePagination
+from api.serializer import CustomPasswordResetSerializer
 from django.contrib.auth import authenticate
+from django.contrib.auth import get_user_model
 from django.contrib.auth import login
 from django.contrib.auth import logout
+from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.shortcuts import render
-from rest_framework import status
+from django.utils.translation import gettext_lazy as _
 from rest_framework import filters
+from rest_framework import status
+from rest_framework.decorators import api_view
 from rest_framework.generics import ListAPIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -12,13 +18,19 @@ from rest_framework.views import APIView
 
 from .models import BlogPost
 from .models import Category
+from .models import Comment
+from .models import Tag
 from .serializer import BlogCreateSerializer
 from .serializer import BlogSerializer
 from .serializer import CategorySerializer
-from .serializer import CreateUserSerializer
-from .serializer import LoginSerializer
-from .serializer import UserSerializer
+from .serializer import CommentReturnSerializer
 from .serializer import CommentSerializer
+from .serializer import CreateUserSerializer
+from .serializer import InitialPasswordResetSerializer
+from .serializer import LoginSerializer
+from .serializer import TagSerializer
+from .serializer import UserSerializer
+
 
 class LoginView(APIView):
     def post(self, request):
@@ -62,16 +74,32 @@ class RegisterView(APIView):
         )
 
 
+class BlogsView(ListAPIView):
+
+    serializer_class = BlogSerializer
+    pagination_class = PageSizePagination
+    search_fields = ["title", "content"]
+    filter_backends = [filters.SearchFilter]
+
+    def get(self, request):
+        return super().get(request)
+
+    def get_queryset(self):
+        queryset = BlogPost.objects.all()
+        category_param = self.request.query_params.get("category")
+        tags_param = self.request.query_params.get("tags")
+
+        if category_param:
+            queryset = queryset.filter(category__name__iexact=category_param.upper())
+        if tags_param:
+            queryset = queryset.filter(tags__name__iexact=tags_param.upper())
+        return queryset
+
+
 class BlogDetailView(APIView):
     """
     create a specific Blog instance.
     """
-    search_fields = [
-        "title",
-        "content",
-        "tags__name",
-        "category__name",
-    ]
 
     def get(self, request, pk):
         blog = get_object_or_404(BlogPost, pk=pk)
@@ -138,10 +166,32 @@ class CategoryListView(APIView):
         return Response(serializer.data)
 
 
-class CommentCreateView(APIView):
-    permission_classes = [IsAuthenticated]
+class TagListView(APIView):
+    def get(self, request):
+        categories = Tag.objects.all()
+        serializer = TagSerializer(categories, many=True)
+        return Response(serializer.data)
+
+
+class CommentView(APIView):
+
+    def get(self, request, blog_id):
+        try:
+            comments = Comment.objects.filter(blog_post_id=blog_id)
+            serializer = CommentReturnSerializer(comments, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Comment.DoesNotExist:
+            return Response(
+                {"message": "Comments not found for this blog post."},
+                status=status.HTTP_200_OK,
+            )
 
     def post(self, request, blog_id):
+        if not request.user.is_authenticated:
+            return Response(
+                {"message": "You must be logged in to post a comment."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         try:
             blog = BlogPost.objects.get(id=blog_id)
         except BlogPost.DoesNotExist:
@@ -153,3 +203,37 @@ class CommentCreateView(APIView):
         serializer.is_valid(raise_exception=True)
         serializer.save(author=request.user, blog_post=blog)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+def is_valid_user_email(email):
+    return email in get_user_model().objects.values_list("email", flat=True)
+
+
+class CustomPasswordResetView(APIView):
+    def post(self, request):
+        initial_serializer = InitialPasswordResetSerializer(
+            data=request.data, context={"request": request}
+        )
+        initial_serializer.is_valid(raise_exception=True)
+        email = initial_serializer.validated_data["email"]
+
+        # Check if the email is valid
+        if is_valid_user_email(email):
+            reset_serializer = CustomPasswordResetSerializer(
+                data=request.data, context={"request": request}
+            )
+            reset_serializer.is_valid(raise_exception=True)
+            reset_serializer.save()
+            return Response({"ok": True, "email": email}, status=status.HTTP_200_OK)
+        else:
+            return Response(
+                {"detail": "Invalid email address."}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+
+@api_view(["GET"])
+def password_reset_confirm(request, uidb64, token):
+    """Redirects to frontend password reset confirm"""
+    # hardcoding the frontend url for testing purposes
+    frontend_url = f"http://localhost:3000/resetpassword/confirm/{uidb64}/{token}/"
+    return HttpResponseRedirect(frontend_url)

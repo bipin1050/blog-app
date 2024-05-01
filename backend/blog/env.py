@@ -10,6 +10,16 @@ class Environment(BaseSettings):
     DB_PASSWORD: str = "password"
     DB_HOST: str = "localhost"
     DB_PORT: int = 5432
+    ALLOWED_HOSTS: str = "*"
+
+    EMAIL_HOST: str = "mail.example.com.np"
+    EMAIL_HOST_USER: str = "alert@example.com"
+    EMAIL_HOST_PASSWORD: str = "email_host_pass"
+    DEFAULT_FROM_EMAIL: str = "alert@example.com"
+    EMAIL_PORT: int = 587
+    EMAIL_USE_SSL: bool = False
+    EMAIL_USE_TLS: bool = True
+    EMAIL_TIMEOUT: int = 25
 
 
 env = Environment()

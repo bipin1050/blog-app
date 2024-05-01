@@ -1,11 +1,14 @@
+from dj_rest_auth.serializers import PasswordResetSerializer
+from django.conf import settings
 from rest_framework import serializers
 from rest_framework.serializers import ModelSerializer
 
 from .models import BlogPost
 from .models import Category
+from .models import Comment
 from .models import Tag
 from .models import User
-from .models import Comment
+
 
 class LoginSerializer(serializers.Serializer):
     username = serializers.CharField()
@@ -41,10 +44,18 @@ class CreateUserSerializer(ModelSerializer):
 class BlogSerializer(serializers.ModelSerializer):
     category = serializers.SerializerMethodField(method_name="get_category")
     tags = serializers.StringRelatedField(many=True)
+    author = serializers.SerializerMethodField(method_name="get_author")
 
     def get_category(self, obj):
-        category_instance = Category.objects.get(pk=obj.id)
-        return category_instance.name if category_instance else None
+        return obj.category.name if obj.category else None
+
+    def get_author(self, obj):
+        author = User.objects.get(pk=obj.author_id)
+        return (
+            author.first_name + " " + author.last_name
+            if author.first_name
+            else author.username
+        )
 
     class Meta:
         model = BlogPost
@@ -100,9 +111,56 @@ class CategorySerializer(serializers.ModelSerializer):
         model = Category
         fields = ["name"]
 
+    def to_representation(self, instance):
+        return instance.name
+
+
+class TagSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Tag
+        fields = ["name"]
+
+    def to_representation(self, instance):
+        return instance.name
+
 
 class CommentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Comment
         fields = ["id", "author", "blog_post", "content"]
         read_only_fields = ["author", "blog_post"]
+
+
+class CommentReturnSerializer(serializers.ModelSerializer):
+    author = serializers.SerializerMethodField(method_name="get_author")
+
+    def get_author(self, obj):
+        author = User.objects.get(pk=obj.author_id)
+        return (
+            author.first_name + " " + author.last_name if author.first_name else "User"
+        )
+
+    class Meta:
+        model = Comment
+        fields = ["id", "author", "blog_post", "content"]
+
+
+class InitialPasswordResetSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+
+class CustomPasswordResetSerializer(PasswordResetSerializer):
+    """Custom serializer to send emails from queue"""
+
+    def save(self):
+        request = self.context.get("request")
+        # Set some values to trigger the send_email method.
+        opts = {
+            "use_https": False,
+            "from_email": getattr(settings, "DEFAULT_FROM_EMAIL"),
+            "request": request,
+            "domain_override": "localhost:8000",
+        }
+
+        opts.update(self.get_email_options())
+        self.reset_form.save(**opts)
