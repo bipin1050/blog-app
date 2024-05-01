@@ -8,14 +8,9 @@ Blog App
 ##
 
 ### Table of Contents
-- Folder Structure
 - Installation
 - Setting Up React
 - Setting Up Django
-##
-
-### Folder Structure
-
 
 ##
 ### Installation
